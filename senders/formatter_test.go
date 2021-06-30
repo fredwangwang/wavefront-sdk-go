@@ -45,9 +45,11 @@ func BenchmarkMetricLine(b *testing.B) {
 	tags := map[string]string{"env": "test"}
 
 	var r string
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		r, _ = MetricLine(name, value, ts, src, tags, "")
 	}
+	b.StopTimer()
 	line = r
 }
 
