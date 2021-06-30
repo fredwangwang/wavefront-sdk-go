@@ -32,11 +32,11 @@ func MetricLine(name string, value float64, ts int64, source string, tags map[st
 	sanitizeInternalSb(sb, name)
 	sb.WriteByte('"')
 
-	sb.WriteString(" ")
+	sb.WriteByte(' ')
 	sb.WriteString(strconv.FormatFloat(value, 'f', -1, 64))
 
 	if ts != 0 {
-		sb.WriteString(" ")
+		sb.WriteByte(' ')
 		sb.WriteString(strconv.FormatInt(ts, 10))
 	}
 
@@ -83,38 +83,43 @@ func HistoLine(name string, centroids histogram.Centroids, hgs map[histogram.Gra
 	defer internal.PutBuffer(sb)
 
 	if ts != 0 {
-		sb.WriteString(" ")
+		sb.WriteByte(' ')
 		sb.WriteString(strconv.FormatInt(ts, 10))
 	}
 	// Preprocess line. We know len(hgs) > 0 here.
 	for _, centroid := range centroids.Compact() {
 		sb.WriteString(" #")
 		sb.WriteString(strconv.Itoa(centroid.Count))
-		sb.WriteString(" ")
+		sb.WriteByte(' ')
 		sb.WriteString(strconv.FormatFloat(centroid.Value, 'f', -1, 64))
 	}
-	sb.WriteString(" ")
-	sb.WriteString(strconv.Quote(sanitizeInternal(name)))
+	sb.WriteByte(' ')
+	sb.WriteByte('"')
+	sanitizeInternalSb(sb, name)
+	sb.WriteByte('"')
+
 	sb.WriteString(" source=")
-	sb.WriteString(sanitizeValue(source))
+	sanitizeValueSb(sb, source)
 
 	for k, v := range tags {
 		if v == "" {
 			return "", errors.New("histogram tag value cannot be blank")
 		}
-		sb.WriteString(" ")
-		sb.WriteString(strconv.Quote(sanitizeInternal(k)))
-		sb.WriteString("=")
-		sb.WriteString(sanitizeValue(v))
+		sb.WriteByte(' ')
+		sb.WriteByte('"')
+		sanitizeInternalSb(sb, k)
+		sb.WriteByte('"')
+		sb.WriteByte('=')
+		sanitizeValueSb(sb, v)
 	}
-	sbBytes := sb.String()
+	sbBytes := sb.Bytes()
 
 	sbg := bytes.Buffer{}
 	for hg, on := range hgs {
 		if on {
 			sbg.WriteString(hg.String())
-			sbg.WriteString(sbBytes)
-			sbg.WriteString("\n")
+			sbg.Write(sbBytes)
+			sbg.WriteByte('\n')
 		}
 	}
 	return sbg.String(), nil
@@ -144,9 +149,9 @@ func SpanLine(name string, startMillis, durationMillis int64, source, traceId, s
 	sb := internal.GetBuffer()
 	defer internal.PutBuffer(sb)
 
-	sb.WriteString(sanitizeValue(name))
+	sanitizeValueSb(sb, name)
 	sb.WriteString(" source=")
-	sb.WriteString(sanitizeValue(source))
+	sanitizeValueSb(sb, source)
 	sb.WriteString(" traceId=")
 	sb.WriteString(traceId)
 	sb.WriteString(" spanId=")
@@ -163,26 +168,32 @@ func SpanLine(name string, startMillis, durationMillis int64, source, traceId, s
 	}
 
 	if len(spanLogs) > 0 {
-		sb.WriteString(" ")
-		sb.WriteString(strconv.Quote(sanitizeInternal("_spanLogs")))
-		sb.WriteString("=")
-		sb.WriteString(strconv.Quote(sanitizeInternal("true")))
+		sb.WriteByte(' ')
+		sb.WriteByte('"')
+		sb.WriteString("_spanLogs")
+		sb.WriteByte('"')
+		sb.WriteByte('=')
+		sb.WriteByte('"')
+		sb.WriteString("true")
+		sb.WriteByte('"')
 	}
 
 	for _, tag := range tags {
 		if tag.Key == "" || tag.Value == "" {
 			return "", errors.New("span tag key/value cannot be blank")
 		}
-		sb.WriteString(" ")
-		sb.WriteString(strconv.Quote(sanitizeInternal(tag.Key)))
-		sb.WriteString("=")
-		sb.WriteString(sanitizeValue(tag.Value))
+		sb.WriteByte(' ')
+		sb.WriteByte('"')
+		sanitizeInternalSb(sb, tag.Key)
+		sb.WriteByte('"')
+		sb.WriteByte('=')
+		sanitizeValueSb(sb, tag.Value)
 	}
-	sb.WriteString(" ")
+	sb.WriteByte(' ')
 	sb.WriteString(strconv.FormatInt(startMillis, 10))
-	sb.WriteString(" ")
+	sb.WriteByte(' ')
 	sb.WriteString(strconv.FormatInt(durationMillis, 10))
-	sb.WriteString("\n")
+	sb.WriteByte('\n')
 
 	return sb.String(), nil
 }
@@ -218,18 +229,18 @@ func EventLine(name string, startMillis, endMillis int64, source string, tags ma
 
 	startMillis, endMillis = adjustStartEndTime(startMillis, endMillis)
 
-	sb.WriteString(" ")
+	sb.WriteByte(' ')
 	sb.WriteString(strconv.FormatInt(startMillis, 10))
-	sb.WriteString(" ")
+	sb.WriteByte(' ')
 	sb.WriteString(strconv.FormatInt(endMillis, 10))
 
-	sb.WriteString(" ")
+	sb.WriteByte(' ')
 	sb.WriteString(strconv.Quote(name))
 
 	for k, v := range annotations {
-		sb.WriteString(" ")
+		sb.WriteByte(' ')
 		sb.WriteString(k)
-		sb.WriteString("=")
+		sb.WriteByte('=')
 		sb.WriteString(strconv.Quote(v))
 	}
 
@@ -243,7 +254,7 @@ func EventLine(name string, startMillis, endMillis int64, source string, tags ma
 		sb.WriteString(strconv.Quote(fmt.Sprintf("%v: %v", k, v)))
 	}
 
-	sb.WriteString("\n")
+	sb.WriteByte('\n')
 	return sb.String(), nil
 }
 
@@ -353,7 +364,7 @@ func sanitizeInternal(str string) string {
 		if isLegal {
 			sb.WriteString(strCur)
 		} else {
-			sb.WriteString("-")
+			sb.WriteByte('-')
 		}
 	}
 	return sb.String()
